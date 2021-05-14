@@ -15,7 +15,6 @@ Current TODO's:
 - extract config file (IP, Port, user, password, etc...)
 - integrate security
 - integrate with other scripts on computer
-- add file for python requirements
 - encapsulate some functionality to be much better readable
 - add some tests
 - SSO integration if possible?
