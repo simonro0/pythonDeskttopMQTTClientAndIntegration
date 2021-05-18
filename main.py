@@ -65,7 +65,15 @@ def on_message(client, userdata, msg):
 
             global quit_publish_loop
             quit_publish_loop = True
-            time.sleep(10)
+            time.sleep(5)
+            content = "Shutting down in 5 seconds"
+            windowsUserNotifier.show_toast(header, content)
+            time.sleep(2)
+            content = "Shutting down in 3 seconds"
+            windowsUserNotifier.show_toast(header, content)
+            time.sleep(3)
+            content = "Shutting down!"
+            windowsUserNotifier.show_toast(header, content)
             subprocess.run("shutdown /s /f")
         if command == "/hint":
             header = "MQTT-Notification"
