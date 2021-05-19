@@ -9,7 +9,7 @@ MQTT Capabilities:
     - shutdown time via "computer/shutdowntime"
     - last will via "computer/lastwill"
 - receive notifications via "computer/command/hint topic"
-- start shutdowntimer via "computer/command/shutdown topic"
+- start shutdown timer via "computer/command/shutdown topic"
 
 Current TODO's:
 - extract config file (IP, Port, user, password, etc...)

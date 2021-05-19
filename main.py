@@ -1,4 +1,7 @@
+import math
+import numbers
 import subprocess
+import threading
 import time
 from win10toast import ToastNotifier
 # from configparser import ConfigParser
@@ -12,18 +15,21 @@ import pytz
 
 QOS = {'At most once': 0, 'At least once': 1, 'Exactly once': 2}
 windowsUserNotifier = ToastNotifier()
+default_header = "MQTT-Backggroundscript"
 
 # General data
 localMqttBroker = "192.168.0.198"
-starttime = time.time()
+start_time = time.time()
+mqtt_client = mqtt.Client()
 
 quit_publish_loop = False
 # Own topics to send
 general_topic = "computer"
 default_topic = general_topic + "/running"
-startime_topic = general_topic + "/starttime"
-shutdowntime_topic = general_topic + "/shutdowntime"
+start_time_topic = general_topic + "/starttime"
+shutdown_time_topic = general_topic + "/shutdowntime"
 
+publishNotifications = "nodered/notify"
 last_will = general_topic + "/lastwill"
 
 # Topics to subscribe
@@ -51,10 +57,21 @@ def on_message(client, userdata, msg):
     if msg.topic.startswith(request_topics):
         command = msg.topic[len(request_topics):]
         if command == "/shutdown":
-            header = "MQTT-Backggroundscript"
             content = "Shutting down in 10 seconds"
             print(current_time + content)
-            windowsUserNotifier.show_toast(header, content)
+            notify_timer1 = threading.Timer(3, shut_down_hint, [3])
+            notify_timer2 = threading.Timer(6, shut_down_hint, [6])
+            notify_timer3 = threading.Timer(9, shut_down_hint, [9])
+            do_timer = threading.Timer(11, shut_down_computer)
+
+            client.publish(topic=publishNotifications, payload="Computer is shutting down!", qos=QOS['Exactly once'])
+            global default_header
+            windowsUserNotifier.show_toast(default_header, content)
+            notify_timer1.start()
+            notify_timer2.start()
+            notify_timer3.start()
+            do_timer.start()
+
             # Previous attempt to use the existing script and setting the shutdown time to 1 minute
             # configfilename = "E:/Eigene Dateien/Eigene Programme/AutoHotkey/NoCapslockAndShortkeys/ShutdownAtIn.ini"
             # parser = ConfigParser()
@@ -62,24 +79,26 @@ def on_message(client, userdata, msg):
             # parser.set("General", "RestDurationInMinutes", "1")
             # with open(configfilename, "w") as configfile:
             #     parser.write(configfile)
-
-            global quit_publish_loop
-            quit_publish_loop = True
-            time.sleep(5)
-            content = "Shutting down in 5 seconds"
-            windowsUserNotifier.show_toast(header, content)
-            time.sleep(2)
-            content = "Shutting down in 3 seconds"
-            windowsUserNotifier.show_toast(header, content)
-            time.sleep(3)
-            content = "Shutting down!"
-            windowsUserNotifier.show_toast(header, content)
-            subprocess.run("shutdown /s /f")
         if command == "/hint":
-            header = "MQTT-Notification"
+            header = "MQTT-Remote-Notification"
             content = msg.topic + ": " + str(msg.payload)
             print(current_time + "Got a hint: " + content)
             windowsUserNotifier.show_toast(header, content)
+
+
+def shut_down_hint(time_waited):
+    global default_header
+    content = "Shutting down in {remaining:n} seconds".format(remaining=math.floor(10-time_waited))
+    windowsUserNotifier.show_toast(title=default_header, msg=content, duration=2, threaded=True)
+
+
+def shut_down_computer():
+    global default_header
+    global quit_publish_loop
+    quit_publish_loop = True
+    content = "Shutting down!"
+    windowsUserNotifier.show_toast(title=default_header, msg=content, duration=2, threaded=True)
+    subprocess.run("shutdown /s /f")
 
 
 # The callback for having new subscriptions
@@ -87,26 +106,25 @@ def on_subscribe(client, userdata, mid, granted_qos):
     print("Subscription was called")
 
 
-client = mqtt.Client()
-client.on_connect = on_connect
-client.on_message = on_message
-client.on_subscribe = on_subscribe
+mqtt_client.on_connect = on_connect
+mqtt_client.on_message = on_message
+mqtt_client.on_subscribe = on_subscribe
 
-client.will_set(topic=last_will, payload="unexpected_shutdown", qos=QOS['Exactly once'], retain=False)
-client.connect(host=localMqttBroker, port=1883, keepalive=60)
+mqtt_client.will_set(topic=last_will, payload="unexpected_shutdown", qos=QOS['Exactly once'], retain=False)
+mqtt_client.connect(host=localMqttBroker, port=1883, keepalive=60)
 
 # Blocking call that processes network traffic, dispatches callbacks and
 # handles reconnecting.
 # Other loop*() functions are available that give a threaded interface and a
 # manual interface.
-client.loop_start()
+mqtt_client.loop_start()
 
-client.publish(topic=default_topic, payload="True", qos=QOS['Exactly once'])
-client.publish(topic=startime_topic, payload=starttime, qos=QOS['Exactly once'])
+mqtt_client.publish(topic=default_topic, payload="True", qos=QOS['Exactly once'])
+mqtt_client.publish(topic=start_time_topic, payload=start_time, qos=QOS['Exactly once'])
 while not quit_publish_loop:
     time.sleep(30)  # wait some seconds until next publish
-    client.publish(topic=default_topic, payload="True", qos=QOS['Exactly once'])
+    mqtt_client.publish(topic=default_topic, payload="True", qos=QOS['Exactly once'])
 
-client.publish(topic=shutdowntime_topic, payload=time.time(), qos=QOS['Exactly once'])
-client.publish(topic=default_topic, payload="False", qos=QOS['Exactly once'])
-client.loop_stop()
+mqtt_client.publish(topic=shutdown_time_topic, payload=time.time(), qos=QOS['Exactly once'])
+mqtt_client.publish(topic=default_topic, payload="False", qos=QOS['Exactly once'])
+mqtt_client.loop_stop()
