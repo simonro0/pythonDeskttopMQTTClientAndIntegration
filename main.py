@@ -84,6 +84,17 @@ def on_message(client, userdata, msg):
             content = msg.topic + ": " + str(msg.payload)
             print(current_time + "Got a hint: " + content)
             windowsUserNotifier.show_toast(header, content)
+        if command == "/volume_up":
+            volume_up()
+        if command == "/volume_down":
+            volume_down()
+        if command == "/volume_set":
+            volume_set(msg.payload)
+
+
+# The callback for having new subscriptions
+def on_subscribe(client, userdata, mid, granted_qos):
+    print("Subscription was called")
 
 
 def shut_down_hint(time_waited):
@@ -101,9 +112,87 @@ def shut_down_computer():
     subprocess.run("shutdown /s /f")
 
 
-# The callback for having new subscriptions
-def on_subscribe(client, userdata, mid, granted_qos):
-    print("Subscription was called")
+def volume_up():
+    from ctypes import cast, POINTER
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+    import math
+    # Get default audio device using PyCAW
+    devices = AudioUtilities.GetSpeakers()
+    interface = devices.Activate(
+        IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    volume = cast(interface, POINTER(IAudioEndpointVolume))
+
+    # Get current volume
+    current_volume_db = volume.GetMasterVolumeLevel()
+    percent_value = convert_db_to_percent(current_volume_db)
+    print("current master volume is: %sdb %sperc" % (current_volume_db, percent_value))
+    print("new master volume is: %sdb %sperc" % (convert_percent_to_db(percent_value + 10), percent_value + 10))
+    volume.SetMasterVolumeLevel(convert_percent_to_db(percent_value + 10), None)  # NOTE: -6.0 dB = half volume !
+
+
+def volume_down():
+    from ctypes import cast, POINTER
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+    import math
+    # Get default audio device using PyCAW
+    devices = AudioUtilities.GetSpeakers()
+    interface = devices.Activate(
+        IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    volume = cast(interface, POINTER(IAudioEndpointVolume))
+
+    # Get current volume
+    current_volume_db = volume.GetMasterVolumeLevel()
+    percent_value = convert_db_to_percent(current_volume_db)
+    new_db_value = convert_percent_to_db(percent_value - 10)
+    print("current master volume is: %sdb %sperc" % (current_volume_db, percent_value))
+    print("new master volume is: %sdb %sperc" % (new_db_value, percent_value - 10))
+    volume.SetMasterVolumeLevel(new_db_value, None)  # NOTE: -6.0 dB = half volume !
+
+
+def volume_set(value_to_set):
+    from ctypes import cast, POINTER
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+    import math
+    # Get default audio device using PyCAW
+    devices = AudioUtilities.GetSpeakers()
+    interface = devices.Activate(
+        IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    volume = cast(interface, POINTER(IAudioEndpointVolume))
+
+    # Get current volume
+    current_volume_db = volume.GetMasterVolumeLevel()
+    new_db_value = convert_percent_to_db(value_to_set)
+    print("current master volume is: %sdb %sperc" % (current_volume_db, convert_db_to_percent(current_volume_db)))
+    print("new master volume is: %sdb %sperc" % (new_db_value, value_to_set))
+    volume.SetMasterVolumeLevel(new_db_value, None)
+
+
+def convert_db_to_percent(db):
+    # print("dbgot value %s" % db)
+    db += 62.0
+    db = max(0.0, db)
+    db = min(db, 64.0)
+    # print("dbgot value %s after min max" % (db-62))
+    result = pow(10, (db/35.0))*1.5 - 1.0
+    result = max(0.0, result)
+    result = min(result, 100.0)
+    # print("dbgot result %s afterwards" % result)
+    return result
+
+
+def convert_percent_to_db(percent):
+    # print("got value %s" % percent)
+    percent = min(percent, 100.0)
+    percent = max(0.0, percent)
+    # print("got value %s after min max" % percent)
+    result = math.log((percent+1)/1.5, 10) * 35.0 - 62
+    result = max(-62.0, result)
+    result = min(result, 2.0)
+    # print("got result %s afterwards" % result)
+    return result
 
 
 mqtt_client.on_connect = on_connect
