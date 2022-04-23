@@ -28,6 +28,7 @@ general_topic = "computer"
 default_topic = general_topic + "/running"
 start_time_topic = general_topic + "/starttime"
 shutdown_time_topic = general_topic + "/shutdowntime"
+current_volume_topic = general_topic + "/volume_get"
 
 publishNotifications = "nodered/notify"
 last_will = general_topic + "/lastwill"
@@ -126,9 +127,10 @@ def volume_up():
     # Get current volume
     current_volume_db = volume.GetMasterVolumeLevel()
     percent_value = convert_db_to_percent(current_volume_db)
-    print("current master volume is: %sdb %sperc" % (current_volume_db, percent_value))
-    print("new master volume is: %sdb %sperc" % (convert_percent_to_db(percent_value + 10), percent_value + 10))
+    print("current master volume is: %06.2fdb %3dperc" % (current_volume_db, percent_value))
+    print("new master volume is: %06.2fdb %3dperc" % (convert_percent_to_db(percent_value + 10), percent_value + 10))
     volume.SetMasterVolumeLevel(convert_percent_to_db(percent_value + 10), None)  # NOTE: -6.0 dB = half volume !
+    volume_get()
 
 
 def volume_down():
@@ -146,9 +148,10 @@ def volume_down():
     current_volume_db = volume.GetMasterVolumeLevel()
     percent_value = convert_db_to_percent(current_volume_db)
     new_db_value = convert_percent_to_db(percent_value - 10)
-    print("current master volume is: %sdb %sperc" % (current_volume_db, percent_value))
-    print("new master volume is: %sdb %sperc" % (new_db_value, percent_value - 10))
+    print("current master volume is: %06.2fdb %3dperc" % (current_volume_db, percent_value))
+    print("new master volume is: %06.2fdb %3dperc" % (new_db_value, percent_value - 10))
     volume.SetMasterVolumeLevel(new_db_value, None)  # NOTE: -6.0 dB = half volume !
+    volume_get()
 
 
 def volume_set(value_to_set):
@@ -164,10 +167,30 @@ def volume_set(value_to_set):
 
     # Get current volume
     current_volume_db = volume.GetMasterVolumeLevel()
+    value_to_set = float(value_to_set)
     new_db_value = convert_percent_to_db(value_to_set)
-    print("current master volume is: %sdb %sperc" % (current_volume_db, convert_db_to_percent(current_volume_db)))
-    print("new master volume is: %sdb %sperc" % (new_db_value, value_to_set))
+    print("current master volume is: %06.2fdb %3dperc" % (current_volume_db, convert_db_to_percent(current_volume_db)))
+    print("new master volume is: %06.2fdb %3dperc" % (new_db_value, value_to_set))
     volume.SetMasterVolumeLevel(new_db_value, None)
+    volume_get()
+
+
+def volume_get():
+    from ctypes import cast, POINTER
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+    import math
+    # Get default audio device using PyCAW
+    devices = AudioUtilities.GetSpeakers()
+    interface = devices.Activate(
+        IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    volume = cast(interface, POINTER(IAudioEndpointVolume))
+
+    # Get current volume
+    current_volume_db = volume.GetMasterVolumeLevel()
+    percent_value = convert_db_to_percent(current_volume_db)
+    print("current master volume is: %06.2fdb %3dperc" % (current_volume_db, percent_value))
+    mqtt_client.publish(topic=current_volume_topic, payload=round(percent_value), qos=QOS['At most once'], retain=True)
 
 
 def convert_db_to_percent(db):
@@ -209,11 +232,12 @@ mqtt_client.connect(host=localMqttBroker, port=1883, keepalive=60)
 mqtt_client.loop_start()
 
 mqtt_client.publish(topic=default_topic, payload="True", qos=QOS['Exactly once'])
-mqtt_client.publish(topic=start_time_topic, payload=start_time, qos=QOS['Exactly once'])
+mqtt_client.publish(topic=start_time_topic, payload=start_time, qos=QOS['Exactly once'], retain=True)
 while not quit_publish_loop:
     time.sleep(30)  # wait some seconds until next publish
     mqtt_client.publish(topic=default_topic, payload="True", qos=QOS['Exactly once'])
+    volume_get()
 
-mqtt_client.publish(topic=shutdown_time_topic, payload=time.time(), qos=QOS['Exactly once'])
-mqtt_client.publish(topic=default_topic, payload="False", qos=QOS['Exactly once'])
+mqtt_client.publish(topic=shutdown_time_topic, payload=time.time(), qos=QOS['Exactly once'], retain=True)
+mqtt_client.publish(topic=default_topic, payload="False", qos=QOS['Exactly once'], retain=True)
 mqtt_client.loop_stop()

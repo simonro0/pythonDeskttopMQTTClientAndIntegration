@@ -3,7 +3,7 @@
 This python script allows to integrate a windows 10 PC to mqtt smart home and be also be partially controlled.
 
 __MQTT Capabilities:__
-- Publish some informatione about the computer
+- Publish some information about the computer
     - running State via "computer/running"
     - start time via "computer/starttime"
     - shutdown time via "computer/shutdowntime"
