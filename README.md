@@ -20,4 +20,7 @@ __Current TODO's:__
 - encapsulate some functionality to be much better readable
 - add some tests
 - SSO integration if possible?
+- Combine multiple topics to just one with more data
+- Integrate Flo's image recognition to analyse local images from onedrive
+  - recognize images of gascounter, enegy meter and person scale so those can be converted to actual savable values
 - and much more...
